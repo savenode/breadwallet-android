@@ -1,4 +1,4 @@
-![ƀ]() Multicurrency Wallet from SaveNode
+[![SaveNode Wallet](sno-img.png)] Multicurrency Wallet from SaveNode 
 ----------------------------------
 
 [![Get it on Google Play](/images/icon-google-play.png)](https://play.google.com/store/apps/details?id=com.breadwallet)
