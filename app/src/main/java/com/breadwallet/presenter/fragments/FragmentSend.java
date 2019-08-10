@@ -1,7 +1,10 @@
 package com.breadwallet.presenter.fragments;
 
+import android.Manifest;
 import android.app.Activity;
 import android.arch.lifecycle.ViewModelProviders;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.res.Configuration;
 import android.os.Bundle;
@@ -21,10 +24,19 @@ import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Toast;
 
+import com.android.volley.Request;
+import com.android.volley.Response;
+import com.android.volley.RetryPolicy;
+import com.android.volley.VolleyError;
+import com.android.volley.toolbox.StringRequest;
 import com.breadwallet.BuildConfig;
 import com.breadwallet.R;
 import com.breadwallet.presenter.interfaces.BROnSignalCompletion;
+import com.breadwallet.sharedPrefsPackageNew.ConstantsNew;
+import com.breadwallet.sharedPrefsPackageNew.SharedPrefsNew;
+import com.breadwallet.sharedPrefsPackageNew.VolleySingleton;
 import com.breadwallet.ui.wallet.WalletActivity;
 import com.breadwallet.presenter.customviews.BRButton;
 import com.breadwallet.presenter.customviews.BRDialogView;
@@ -50,9 +62,21 @@ import com.breadwallet.wallet.WalletsMaster;
 import com.breadwallet.wallet.util.CryptoUriParser;
 import com.breadwallet.wallet.abstracts.BaseWalletManager;
 import com.breadwallet.wallet.wallets.ethereum.WalletEthManager;
+import com.google.zxing.integration.android.IntentIntegrator;
+import com.karumi.dexter.Dexter;
+import com.karumi.dexter.PermissionToken;
+import com.karumi.dexter.listener.PermissionDeniedResponse;
+import com.karumi.dexter.listener.PermissionGrantedResponse;
+import com.karumi.dexter.listener.PermissionRequest;
+import com.karumi.dexter.listener.single.PermissionListener;
 import com.platform.HTTPServer;
 
+import org.json.JSONObject;
+
+import java.io.UnsupportedEncodingException;
 import java.math.BigDecimal;
+import java.util.HashMap;
+import java.util.Map;
 
 
 /**
@@ -113,6 +137,9 @@ public class FragmentSend extends ModalDialogFragment implements BRKeyboard.OnIn
     private ViewGroup mSignalLayout;
     private static boolean mIsSendShown;
 
+    // Worked by Vaival's developer
+    String SNO = "";
+
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
 
@@ -155,6 +182,7 @@ public class FragmentSend extends ModalDialogFragment implements BRKeyboard.OnIn
         mCurrencyCode.requestLayout();
         mSignalLayout.setOnTouchListener(new SlideDetector(getContext(), mSignalLayout));
 
+
         mSignalLayout.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -194,6 +222,25 @@ public class FragmentSend extends ModalDialogFragment implements BRKeyboard.OnIn
 
         mSignalLayout.setLayoutTransition(UiUtils.getDefaultTransition());
 
+        /**
+         * // Worked by Vaival's developer
+         */
+        try{
+            SNO = getArguments().getString("SNO");
+            if(SNO == null || SNO.isEmpty()){
+                SNO = "";
+            }else{
+                String s = "SNO";
+//                mCurrencyCodeButton.setVisibility(View.GONE);
+                mCurrencyCodeButton.setVisibility(View.VISIBLE);
+                mCurrencyCodeButton.setText(s);
+            }
+        }catch (Exception e){
+
+        }
+
+        //////////////////////////////////////////
+
         return rootView;
     }
 
@@ -207,8 +254,17 @@ public class FragmentSend extends ModalDialogFragment implements BRKeyboard.OnIn
             mAmountEdit.setVisibility(View.VISIBLE);
             mFeeText.setVisibility(View.VISIBLE);
             mCurrencyCode.setTextColor(getContext().getColor(R.color.almost_black));
-            mCurrencyCode.setText(CurrencyUtils.getSymbolByIso(getActivity(), mSelectedCurrencyCode));
-            mCurrencyCode.setTextSize(getResources().getDimension(R.dimen.currency_code_text_size_large));
+//            mCurrencyCode.setText(CurrencyUtils.getSymbolByIso(getActivity(), mSelectedCurrencyCode));
+//            mCurrencyCode.setTextSize(getResources().getDimension(R.dimen.currency_code_text_size_large));
+
+            if(!SNO.isEmpty()){
+                mCurrencyCode.setWidth(0);
+                mCurrencyCode.setTextSize(getResources().getDimension(R.dimen.currency_code_text_size_large));
+
+            }else{
+                mCurrencyCode.setText(CurrencyUtils.getSymbolByIso(getActivity(), mSelectedCurrencyCode));
+                mCurrencyCode.setTextSize(getResources().getDimension(R.dimen.currency_code_text_size_large));
+            }
 
             ConstraintSet set = new ConstraintSet();
             set.clone(mAmountLayout);
@@ -253,98 +309,112 @@ public class FragmentSend extends ModalDialogFragment implements BRKeyboard.OnIn
         mPaste.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if (!UiUtils.isClickAllowed()) return;
-                String theUrl = BRClipboardManager.getClipboard(getActivity());
-                if (Utils.isNullOrEmpty(theUrl)) {
-                    sayClipboardEmpty();
-                    return;
+                if (!SNO.isEmpty()) {
+
+                    ClipboardManager clipboard = (ClipboardManager) getActivity().getSystemService(Context.CLIPBOARD_SERVICE);
+                    try {
+                        ClipData.Item item = clipboard.getPrimaryClip().getItemAt(0);
+                        mAddressEdit.setText(item.getText());
+
+                    } catch (Exception e) {
+                        Toast.makeText(getActivity(), "NOTHING TO PASTE", Toast.LENGTH_SHORT).show();
+                    }
+
                 }
-                showKeyboard(false);
-
-                final BaseWalletManager wm = WalletsMaster.getInstance().getCurrentWallet(getActivity());
-
-
-                if (BuildConfig.DEBUG && BuildConfig.BITCOIN_TESTNET) {
-                    theUrl = wm.decorateAddress(theUrl);
-                }
-
-                final CryptoRequest obj = CryptoUriParser.parseRequest(getActivity(), theUrl);
-
-                if (obj == null || Utils.isNullOrEmpty(obj.getAddress())) {
-                    sayInvalidClipboardData();
-                    return;
-                }
-                if (BuildConfig.DEBUG) {
-                    Log.d(TAG, "Send Address -> " + obj.getAddress());
-                    Log.d(TAG, "Send Value -> " + obj.getValue());
-                    Log.d(TAG, "Send Amount -> " + obj.getAmount());
-                }
-
-                if (obj.getCurrencyCode() != null && !obj.getCurrencyCode().equalsIgnoreCase(wm.getCurrencyCode())) {
-                    sayInvalidAddress(); //invalid if the screen is Bitcoin and scanning BitcoinCash for instance
-                    return;
-                }
-
-
-                if (wm.isAddressValid(obj.getAddress())) {
-                    final Activity app = getActivity();
-                    if (app == null) {
-                        Log.e(TAG, "mPaste onClick: app is null");
+                else {
+                    if (!UiUtils.isClickAllowed()) return;
+                    String theUrl = BRClipboardManager.getClipboard(getActivity());
+                    if (Utils.isNullOrEmpty(theUrl)) {
+                        sayClipboardEmpty();
                         return;
                     }
-                    BRExecutor.getInstance().forLightWeightBackgroundTasks().execute(new Runnable() {
-                        @Override
-                        public void run() {
-                            if (wm.containsAddress(obj.getAddress())) {
-                                app.runOnUiThread(new Runnable() {
-                                    @Override
-                                    public void run() {
-                                        BRDialog.showCustomDialog(getActivity(), "", getResources().getString(R.string.Send_containsAddress),
-                                                getResources().getString(R.string.AccessibilityLabels_close), null, new BRDialogView.BROnClickListener() {
-                                                    @Override
-                                                    public void onClick(BRDialogView brDialogView) {
-                                                        brDialogView.dismiss();
-                                                    }
-                                                }, null, null, 0);
-                                        BRClipboardManager.putClipboard(getActivity(), "");
-                                    }
-                                });
+                    showKeyboard(false);
 
-                            } else if (wm.addressIsUsed(obj.getAddress())) {
-                                app.runOnUiThread(new Runnable() {
-                                    @Override
-                                    public void run() {
-                                        String title = String.format("%1$s addresses are intended for single use only.", wm.getName());
-                                        BRDialog.showCustomDialog(getActivity(), title, getString(R.string.Send_UsedAddress_secondLIne),
-                                                "Ignore", "Cancel", new BRDialogView.BROnClickListener() {
-                                                    @Override
-                                                    public void onClick(BRDialogView brDialogView) {
-                                                        brDialogView.dismiss();
-                                                        mAddressEdit.setText(wm.decorateAddress(obj.getAddress()));
-                                                    }
-                                                }, new BRDialogView.BROnClickListener() {
-                                                    @Override
-                                                    public void onClick(BRDialogView brDialogView) {
-                                                        brDialogView.dismiss();
-                                                    }
-                                                }, null, 0);
-                                    }
-                                });
+                    final BaseWalletManager wm = WalletsMaster.getInstance().getCurrentWallet(getActivity());
 
-                            } else {
-                                app.runOnUiThread(new Runnable() {
-                                    @Override
-                                    public void run() {
-                                        mAddressEdit.setText(wm.decorateAddress(obj.getAddress()));
 
-                                    }
-                                });
-                            }
+                    if (BuildConfig.DEBUG && BuildConfig.BITCOIN_TESTNET) {
+                        theUrl = wm.decorateAddress(theUrl);
+                    }
+
+                    final CryptoRequest obj = CryptoUriParser.parseRequest(getActivity(), theUrl);
+
+                    if (obj == null || Utils.isNullOrEmpty(obj.getAddress())) {
+                        sayInvalidClipboardData();
+                        return;
+                    }
+                    if (BuildConfig.DEBUG) {
+                        Log.d(TAG, "Send Address -> " + obj.getAddress());
+                        Log.d(TAG, "Send Value -> " + obj.getValue());
+                        Log.d(TAG, "Send Amount -> " + obj.getAmount());
+                    }
+
+                    if (obj.getCurrencyCode() != null && !obj.getCurrencyCode().equalsIgnoreCase(wm.getCurrencyCode())) {
+                        sayInvalidAddress(); //invalid if the screen is Bitcoin and scanning BitcoinCash for instance
+                        return;
+                    }
+
+
+                    if (wm.isAddressValid(obj.getAddress())) {
+                        final Activity app = getActivity();
+                        if (app == null) {
+                            Log.e(TAG, "mPaste onClick: app is null");
+                            return;
                         }
-                    });
+                        BRExecutor.getInstance().forLightWeightBackgroundTasks().execute(new Runnable() {
+                            @Override
+                            public void run() {
+                                if (wm.containsAddress(obj.getAddress())) {
+                                    app.runOnUiThread(new Runnable() {
+                                        @Override
+                                        public void run() {
+                                            BRDialog.showCustomDialog(getActivity(), "", getResources().getString(R.string.Send_containsAddress),
+                                                    getResources().getString(R.string.AccessibilityLabels_close), null, new BRDialogView.BROnClickListener() {
+                                                        @Override
+                                                        public void onClick(BRDialogView brDialogView) {
+                                                            brDialogView.dismiss();
+                                                        }
+                                                    }, null, null, 0);
+                                            BRClipboardManager.putClipboard(getActivity(), "");
+                                        }
+                                    });
 
-                } else {
-                    sayInvalidClipboardData();
+                                } else if (wm.addressIsUsed(obj.getAddress())) {
+                                    app.runOnUiThread(new Runnable() {
+                                        @Override
+                                        public void run() {
+                                            String title = String.format("%1$s addresses are intended for single use only.", wm.getName());
+                                            BRDialog.showCustomDialog(getActivity(), title, getString(R.string.Send_UsedAddress_secondLIne),
+                                                    "Ignore", "Cancel", new BRDialogView.BROnClickListener() {
+                                                        @Override
+                                                        public void onClick(BRDialogView brDialogView) {
+                                                            brDialogView.dismiss();
+                                                            mAddressEdit.setText(wm.decorateAddress(obj.getAddress()));
+                                                        }
+                                                    }, new BRDialogView.BROnClickListener() {
+                                                        @Override
+                                                        public void onClick(BRDialogView brDialogView) {
+                                                            brDialogView.dismiss();
+                                                        }
+                                                    }, null, 0);
+                                        }
+                                    });
+
+                                } else {
+                                    app.runOnUiThread(new Runnable() {
+                                        @Override
+                                        public void run() {
+                                            mAddressEdit.setText(wm.decorateAddress(obj.getAddress()));
+
+                                        }
+                                    });
+                                }
+                            }
+                        });
+
+                    } else {
+                        sayInvalidClipboardData();
+                    }
                 }
 
             }
@@ -353,13 +423,18 @@ public class FragmentSend extends ModalDialogFragment implements BRKeyboard.OnIn
         mCurrencyCodeButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if (mSelectedCurrencyCode.equalsIgnoreCase(BRSharedPrefs.getPreferredFiatIso(getContext()))) {
-                    Activity app = getActivity();
-                    mSelectedCurrencyCode = WalletsMaster.getInstance().getCurrentWallet(app).getCurrencyCode();
-                } else {
-                    mSelectedCurrencyCode = BRSharedPrefs.getPreferredFiatIso(getContext());
+                if (!SNO.isEmpty()) {
+                    mCurrencyCodeButton.setText("SNO");
                 }
-                updateText();
+                else {
+                    if (mSelectedCurrencyCode.equalsIgnoreCase(BRSharedPrefs.getPreferredFiatIso(getContext()))) {
+                        Activity app = getActivity();
+                        mSelectedCurrencyCode = WalletsMaster.getInstance().getCurrentWallet(app).getCurrencyCode();
+                    } else {
+                        mSelectedCurrencyCode = BRSharedPrefs.getPreferredFiatIso(getContext());
+                    }
+                    updateText();
+                }
 
             }
         });
@@ -367,100 +442,109 @@ public class FragmentSend extends ModalDialogFragment implements BRKeyboard.OnIn
         mScan.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if (!UiUtils.isClickAllowed()) return;
-                saveViewModelData();
-                closeWithAnimation();
-                UiUtils.openScanner(getActivity());
+                if(!SNO.isEmpty()){
+                    cameraPermissionsDexter();
+                }else {
+                    if (!UiUtils.isClickAllowed()) return;
+                    saveViewModelData();
+                    closeWithAnimation();
+                    UiUtils.openScanner(getActivity());
+                }
 
             }
         });
         mSend.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                //not allowed now
-                if (!UiUtils.isClickAllowed()) return;
-
-                // TODO: Refactor: the logic in this listener, some of which is business logic, should be re-organized
-
-                WalletsMaster master = WalletsMaster.getInstance();
-                final BaseWalletManager wm = master.getCurrentWallet(getActivity());
-                //get the current wallet used
-                if (wm == null) {
-                    Log.e(TAG, "onClick: Wallet is null and it can't happen.");
-                    BRReportsManager.reportBug(new NullPointerException("Wallet is null and it can't happen."), true);
-                    return;
+                if(!SNO.isEmpty()){
+                    sendTransactionSaveNode();
                 }
-                boolean allFilled = true;
-                String rawAddress = mAddressEdit.getText().toString();
-                String amountStr = mViewModel.getAmount();
-                String comment = mCommentEdit.getText().toString();
+                else {
+                    //not allowed now
+                    if (!UiUtils.isClickAllowed()) return;
 
-                //inserted amount
-                BigDecimal rawAmount = new BigDecimal(Utils.isNullOrEmpty(amountStr) || amountStr.equalsIgnoreCase(".") ? "0" : amountStr);
-                //is the chosen ISO a crypto (could be a fiat currency)
-                boolean isIsoCrypto = master.isIsoCrypto(getActivity(), mSelectedCurrencyCode);
+                    // TODO: Refactor: the logic in this listener, some of which is business logic, should be re-organized
 
-                BigDecimal cryptoAmount = isIsoCrypto ? wm.getSmallestCryptoForCrypto(getActivity(), rawAmount) : wm.getSmallestCryptoForFiat(getActivity(), rawAmount);
+                    WalletsMaster master = WalletsMaster.getInstance();
+                    final BaseWalletManager wm = master.getCurrentWallet(getActivity());
+                    //get the current wallet used
+                    if (wm == null) {
+                        Log.e(TAG, "onClick: Wallet is null and it can't happen.");
+                        BRReportsManager.reportBug(new NullPointerException("Wallet is null and it can't happen."), true);
+                        return;
+                    }
+                    boolean allFilled = true;
+                    String rawAddress = mAddressEdit.getText().toString();
+                    String amountStr = mViewModel.getAmount();
+                    String comment = mCommentEdit.getText().toString();
 
-                CryptoRequest req = CryptoUriParser.parseRequest(getActivity(), rawAddress);
-                if (req == null || Utils.isNullOrEmpty(req.getAddress())) {
-                    sayInvalidClipboardData();
-                    return;
-                }
-                final Activity activity = getActivity();
-                if (!wm.isAddressValid(req.getAddress())) {
+                    //inserted amount
+                    BigDecimal rawAmount = new BigDecimal(Utils.isNullOrEmpty(amountStr) || amountStr.equalsIgnoreCase(".") ? "0" : amountStr);
+                    //is the chosen ISO a crypto (could be a fiat currency)
+                    boolean isIsoCrypto = master.isIsoCrypto(getActivity(), mSelectedCurrencyCode);
 
-                    BRDialog.showCustomDialog(activity, activity.getString(R.string.Alert_error), activity.getString(R.string.Send_noAddress),
-                            activity.getString(R.string.AccessibilityLabels_close), null, new BRDialogView.BROnClickListener() {
-                                @Override
-                                public void onClick(BRDialogView brDialogView) {
-                                    brDialogView.dismissWithAnimation();
-                                }
-                            }, null, null, 0);
-                    return;
-                }
-                if (cryptoAmount.compareTo(BigDecimal.ZERO) <= 0) {
-                    allFilled = false;
-                    SpringAnimator.failShakeAnimation(getActivity(), mAmountEdit);
-                }
+                    BigDecimal cryptoAmount = isIsoCrypto ? wm.getSmallestCryptoForCrypto(getActivity(), rawAmount) : wm.getSmallestCryptoForFiat(getActivity(), rawAmount);
 
-                if (cryptoAmount.compareTo(wm.getBalance()) > 0) {
-                    allFilled = false;
-                    SpringAnimator.failShakeAnimation(getActivity(), mBalanceText);
-                    SpringAnimator.failShakeAnimation(getActivity(), mFeeText);
-                }
+                    CryptoRequest req = CryptoUriParser.parseRequest(getActivity(), rawAddress);
+                    if (req == null || Utils.isNullOrEmpty(req.getAddress())) {
+                        sayInvalidClipboardData();
+                        return;
+                    }
+                    final Activity activity = getActivity();
+                    if (!wm.isAddressValid(req.getAddress())) {
 
-                if (WalletsMaster.getInstance().isCurrencyCodeErc20(getActivity(), wm.getCurrencyCode())) {
+                        BRDialog.showCustomDialog(activity, activity.getString(R.string.Alert_error), activity.getString(R.string.Send_noAddress),
+                                activity.getString(R.string.AccessibilityLabels_close), null, new BRDialogView.BROnClickListener() {
+                                    @Override
+                                    public void onClick(BRDialogView brDialogView) {
+                                        brDialogView.dismissWithAnimation();
+                                    }
+                                }, null, null, 0);
+                        return;
+                    }
+                    if (cryptoAmount.compareTo(BigDecimal.ZERO) <= 0) {
+                        allFilled = false;
+                        SpringAnimator.failShakeAnimation(getActivity(), mAmountEdit);
+                    }
 
-                    BigDecimal rawFee = wm.getEstimatedFee(cryptoAmount, mAddressEdit.getText().toString());
-                    BaseWalletManager ethWm = WalletEthManager.getInstance(activity.getApplicationContext());
-                    BigDecimal balance = ethWm.getBalance();
-                    if (rawFee.compareTo(balance) > 0) {
-                        if (allFilled) {
-                            BigDecimal ethVal = ethWm.getCryptoForSmallestCrypto(activity, rawFee);
-                            sayInsufficientEthereumForFee(ethVal.setScale(ethWm.getMaxDecimalPlaces(activity), BRConstants.ROUNDING_MODE).toPlainString());
-                            allFilled = false;
+                    if (cryptoAmount.compareTo(wm.getBalance()) > 0) {
+                        allFilled = false;
+                        SpringAnimator.failShakeAnimation(getActivity(), mBalanceText);
+                        SpringAnimator.failShakeAnimation(getActivity(), mFeeText);
+                    }
+
+                    if (WalletsMaster.getInstance().isCurrencyCodeErc20(getActivity(), wm.getCurrencyCode())) {
+
+                        BigDecimal rawFee = wm.getEstimatedFee(cryptoAmount, mAddressEdit.getText().toString());
+                        BaseWalletManager ethWm = WalletEthManager.getInstance(activity.getApplicationContext());
+                        BigDecimal balance = ethWm.getBalance();
+                        if (rawFee.compareTo(balance) > 0) {
+                            if (allFilled) {
+                                BigDecimal ethVal = ethWm.getCryptoForSmallestCrypto(activity, rawFee);
+                                sayInsufficientEthereumForFee(ethVal.setScale(ethWm.getMaxDecimalPlaces(activity), BRConstants.ROUNDING_MODE).toPlainString());
+                                allFilled = false;
+                            }
                         }
                     }
-                }
 
-                if (allFilled) {
-                    final CryptoRequest item = new CryptoRequest.Builder().setAddress(req.getAddress()).setAmount(cryptoAmount).setMessage(comment).build();
+                    if (allFilled) {
+                        final CryptoRequest item = new CryptoRequest.Builder().setAddress(req.getAddress()).setAmount(cryptoAmount).setMessage(comment).build();
 
-                    BRExecutor.getInstance().forLightWeightBackgroundTasks().execute(() -> {
-                        SendManager.sendTransaction(activity, item, wm, (transactionHash, succeeded) -> {
-                            // Show success or error message
-                            if (!Utils.isNullOrEmpty(transactionHash) && succeeded) {
-                                UiUtils.showBreadSignal(activity, activity.getString(R.string.Alerts_sendSuccess),
-                                    activity.getString(R.string.Alerts_sendSuccessSubheader), R.drawable.ic_check_mark_white, () -> UiUtils.killAllFragments(activity));
-                            } else {
-                                UiUtils.showBreadSignal(activity, activity.getString(R.string.Alert_error),
-                                    activity.getString(R.string.Alerts_sendFailure), R.drawable.ic_error_outline_black_24dp, () -> UiUtils.killAllFragments(activity));
-                            }
+                        BRExecutor.getInstance().forLightWeightBackgroundTasks().execute(() -> {
+                            SendManager.sendTransaction(activity, item, wm, (transactionHash, succeeded) -> {
+                                // Show success or error message
+                                if (!Utils.isNullOrEmpty(transactionHash) && succeeded) {
+                                    UiUtils.showBreadSignal(activity, activity.getString(R.string.Alerts_sendSuccess),
+                                            activity.getString(R.string.Alerts_sendSuccessSubheader), R.drawable.ic_check_mark_white, () -> UiUtils.killAllFragments(activity));
+                                } else {
+                                    UiUtils.showBreadSignal(activity, activity.getString(R.string.Alert_error),
+                                            activity.getString(R.string.Alerts_sendFailure), R.drawable.ic_error_outline_black_24dp, () -> UiUtils.killAllFragments(activity));
+                                }
 
+                            });
                         });
-                    });
-                    closeWithAnimation();
+                        closeWithAnimation();
+                    }
                 }
             }
         });
@@ -521,6 +605,145 @@ public class FragmentSend extends ModalDialogFragment implements BRKeyboard.OnIn
         });
 
     }
+
+    // ***** Worked by Vaival's developer
+    void sendTransactionSaveNode() {
+
+        final JSONObject transactionObjectSend = makeJSONForTransactionSaveNode();
+        if(transactionObjectSend !=null){
+            StringRequest stringRequest = new StringRequest(Request.Method.POST, ConstantsNew.TRANSFER_SAVE_NODE, new Response.Listener<String>() {
+                @Override
+                public void onResponse(String response) {
+                    Log.d(TAG, response);
+                    getActivity().finish();
+
+                }
+            }, new Response.ErrorListener() {
+                @Override
+                public void onErrorResponse(VolleyError error) {
+                    error.printStackTrace();
+
+                }
+            }) {
+                @Override
+                public Map<String, String> getHeaders() {
+                    Map<String, String> headers = new HashMap<>();
+                    headers.put("Content-Type", "application/json");
+                    return headers;
+                }
+
+                @Override
+                public String getBodyContentType() {
+                    return "application/json";
+                }
+
+                @Override
+                public byte[] getBody() {
+                    try {
+                        return transactionObjectSend.toString().getBytes("utf-8");
+                    } catch (UnsupportedEncodingException e) {
+                        e.printStackTrace();
+                    }
+                    return new byte[0];
+                }
+            };
+            stringRequest.setRetryPolicy(new RetryPolicy() {
+                @Override
+                public int getCurrentTimeout() {
+                    return 50000;
+                }
+
+                @Override
+                public int getCurrentRetryCount() {
+                    return 50000;
+                }
+
+                @Override
+                public void retry(VolleyError error) throws VolleyError {
+
+                }
+            });
+            VolleySingleton.getInstance(getActivity()).addToRequestQueue(stringRequest);
+        }
+
+    }
+
+    void cameraPermissionsDexter() {
+
+
+        Dexter.withActivity(getActivity())
+                .withPermission(Manifest.permission.CAMERA)
+                .withListener(new PermissionListener() {
+                    @Override
+                    public void onPermissionGranted(PermissionGrantedResponse response) {
+
+                        openQRCodeScanner();
+
+
+                    }
+
+                    @Override
+                    public void onPermissionDenied(PermissionDeniedResponse response) {
+
+                    }
+
+                    @Override
+                    public void onPermissionRationaleShouldBeShown(PermissionRequest permission, PermissionToken token) {
+
+                        token.continuePermissionRequest();
+                    }
+                })
+                .onSameThread().check();
+
+    }
+
+    JSONObject makeJSONForTransactionSaveNode() {
+        try {
+            JSONObject jsonObject = new JSONObject();
+            jsonObject.put("from_address", SharedPrefsNew.getStrings(getActivity(),ConstantsNew.SAVE_NODE_WALLET_ADDRESS));
+            jsonObject.put("from_private_key",SharedPrefsNew.getStrings(getActivity(),ConstantsNew.SECRET));
+            if((Float.parseFloat(mAmountEdit.getText().toString())<=0)
+                    || (Float.parseFloat(mAmountEdit.getText().toString())>Float.parseFloat(SharedPrefsNew.getStrings(getActivity(),ConstantsNew.BALANCE_SAVE_NODE_WALLET)))
+                    || mAmountEdit.getText().toString().isEmpty()){
+                Log.d(TAG, "AMOUNT: "+mAddressEdit.getText().toString());
+                Log.d(TAG, "AMOUNT: "+mAmountEdit.getText().toString());
+                mAmountEdit.setError("Amount not valid");
+                return null;
+            }else{
+                jsonObject.put("value",mAmountEdit.getText().toString());
+                if(mAddressEdit.getText().toString().isEmpty()){
+                    mAddressEdit.setError("Enter Address");
+                    return null;
+                }else{
+                    jsonObject.put("toAddress",mAddressEdit.getText().toString());
+
+                }
+            }
+//            jsonObject.put("from_address", getIntent().getStringExtra(Constants.ADDRESS));
+//            jsonObject.put("from_private_key", transactionObject);
+//            jsonObject.put("value", amount.getText().toString());
+//            jsonObject.put("toAddress", to.getText().toString());
+            Log.d(TAG, jsonObject.toString());
+            return jsonObject;
+
+        } catch (Exception e) {
+            Log.d(TAG, e.toString());
+        }
+        return null;
+    }
+
+    void openQRCodeScanner() {
+        IntentIntegrator intentIntegrator = new IntentIntegrator(getActivity());
+        intentIntegrator.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE_TYPES);
+        intentIntegrator.setPrompt("Start Scan");
+        intentIntegrator.setOrientationLocked(false);
+        intentIntegrator.setCameraId(0);
+        intentIntegrator.setBeepEnabled(false);
+        intentIntegrator.setBarcodeImageEnabled(true);
+        intentIntegrator.initiateScan();
+    }
+
+    // End
 
     private void showKeyboard(boolean b) {
         if (!b) {

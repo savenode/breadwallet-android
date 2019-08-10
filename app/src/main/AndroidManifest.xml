@@ -2,6 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     package="com.breadwallet">
+    <!--android:targetSandboxVersion="1"-->
 
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.INTERNET" />
@@ -39,11 +40,12 @@
         android:name="android.hardware.camera.autofocus"
         android:required="false" />
 
+    <!--android:label="@string/About.appName.android"-->
     <application
         android:name=".BreadApp"
         android:allowBackup="false"
         android:fullBackupContent="false"
-        android:icon="${applicationIcon}"
+        android:icon="@drawable/savenodes"
         android:label="@string/app_name"
         android:largeHeap="true"
         android:launchMode="singleTask"
@@ -51,6 +53,8 @@
         android:supportsRtl="true"
         android:theme="@style/AppTheme.Dark"
         android:windowSoftInputMode="stateVisible|adjustResize">
+        <!--android:usesCleartextTraffic="true"-->
+
         <provider
             android:name="android.support.v4.content.FileProvider"
             android:authorities="${applicationId}"

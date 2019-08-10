@@ -34,6 +34,8 @@ import com.breadwallet.presenter.customviews.BRButton;
 import com.breadwallet.presenter.customviews.BaseTextView;
 import com.breadwallet.presenter.entities.CryptoRequest;
 import com.breadwallet.presenter.fragments.FragmentSend;
+import com.breadwallet.sharedPrefsPackageNew.ConstantsNew;
+import com.breadwallet.sharedPrefsPackageNew.SharedPrefsNew;
 import com.breadwallet.tools.animation.UiUtils;
 import com.breadwallet.tools.animation.BRDialog;
 import com.breadwallet.tools.manager.BRSharedPrefs;
@@ -42,6 +44,7 @@ import com.breadwallet.tools.manager.InternetManager;
 import com.breadwallet.tools.services.SyncService;
 import com.breadwallet.tools.threads.executor.BRExecutor;
 import com.breadwallet.tools.util.BRConstants;
+import com.breadwallet.tools.util.CurrencyUtils;
 import com.breadwallet.tools.util.EventUtils;
 import com.breadwallet.tools.util.SyncTestLogger;
 import com.breadwallet.tools.util.TokenUtil;
@@ -54,6 +57,7 @@ import com.breadwallet.wallet.wallets.bitcoin.BaseBitcoinWalletManager;
 import com.breadwallet.wallet.wallets.ethereum.WalletEthManager;
 import com.platform.HTTPServer;
 
+import java.math.BigDecimal;
 import java.text.NumberFormat;
 import java.text.SimpleDateFormat;
 import java.util.Locale;
@@ -104,6 +108,14 @@ public class WalletActivity extends BRActivity implements InternetManager.Connec
     private String mCurrencyCode;
     private BaseWalletManager mWallet;
 
+
+
+    private ImageButton swap;
+
+    private LinearLayout background;
+
+    String SNO = "";
+
     /**
      * Start the wallet activity for the given currency.
      *
@@ -124,6 +136,28 @@ public class WalletActivity extends BRActivity implements InternetManager.Connec
 
         BRSharedPrefs.putIsNewWallet(this, false);
 
+
+
+
+
+
+        try{
+            Log.d(TAG, "SNOOOOOOO: "+ getIntent().getStringExtra("SNO"));
+            SNO = getIntent().getStringExtra("SNO");
+            if(SNO == null){
+                SNO = "";
+            }
+
+        }catch (Exception e){
+            SNO = "";
+        }
+
+
+
+
+
+
+
         mCurrencyTitle = findViewById(R.id.currency_label);
         mCurrencyPriceUsd = findViewById(R.id.currency_usd_price);
         mBalancePrimary = findViewById(R.id.balance_primary);
@@ -142,6 +176,13 @@ public class WalletActivity extends BRActivity implements InternetManager.Connec
         mDelistedTokenBanner = findViewById(R.id.delisted_token_layout);
         ImageButton backButton = findViewById(R.id.back_icon);
         ImageButton searchIcon = findViewById(R.id.search_icon);
+
+
+
+
+        background = findViewById(R.id.toolbar_layout);
+
+
 
         RecyclerView txList = findViewById(R.id.tx_list);
         txList.setLayoutManager(new LinearLayoutManager(this));
@@ -167,6 +208,13 @@ public class WalletActivity extends BRActivity implements InternetManager.Connec
                 } else {
                     mCurrencyPriceUsd.setVisibility(View.VISIBLE);
                 }
+
+                if(!SNO.isEmpty()){
+                    this.updateUi();
+                }
+
+
+
             }
         });
         mViewModel.getTxListLiveData().observe(this, newTxList -> {
@@ -183,6 +231,23 @@ public class WalletActivity extends BRActivity implements InternetManager.Connec
             }
         });
 
+
+        try{
+            if(!SNO.isEmpty()){
+                swap = findViewById(R.id.swap);
+//                swap.setVisibility(View.GONE);
+                background.setBackgroundColor(getColor(R.color.saveNode));
+                mToolbar.setBackgroundColor(getColor(R.color.saveNode));
+                mToolBarConstraintLayout.setBackgroundColor(getColor(R.color.saveNode));
+                mWalletFooter.setBackgroundColor(getColor(R.color.saveNode));
+                mSendButton.setBackgroundColor(getColor(R.color.saveNode));
+                mReceiveButton.setBackgroundColor(getColor(R.color.saveNode));
+            }
+        }catch (Exception e){
+
+        }
+
+
         startSyncLoggerIfNeeded();
 
         setUpBarFlipper();
@@ -191,7 +256,14 @@ public class WalletActivity extends BRActivity implements InternetManager.Connec
         mSendButton.setOnClickListener(view -> showSendFragment(null));
 
         mSendButton.setHasShadow(false);
-        mReceiveButton.setOnClickListener(view -> UiUtils.showReceiveFragment(WalletActivity.this, true));
+        mReceiveButton.setOnClickListener(view -> {
+//            UiUtils.showReceiveFragment(WalletActivity.this, true);
+            if(!SNO.isEmpty()){
+                UiUtils.showReceiveFragment(WalletActivity.this,true,"SNO");
+            }else{
+                UiUtils.showReceiveFragment(WalletActivity.this, true);
+            }
+        });
 
         backButton.setOnClickListener(view -> {
             onBackPressed();
@@ -208,13 +280,35 @@ public class WalletActivity extends BRActivity implements InternetManager.Connec
 
         mSellButton.setOnClickListener(view -> UiUtils.startWebActivity(WalletActivity.this, HTTPServer.getPlatformUrl(HTTPServer.URL_SELL)));
 
-        mBalancePrimary.setOnClickListener(view -> swap());
-        mBalanceSecondary.setOnClickListener(view -> swap());
+//        mBalancePrimary.setOnClickListener(view -> swap());
+//        mBalanceSecondary.setOnClickListener(view -> swap());
+
+        if(!SNO.isEmpty()){
+            Log.d(TAG, "SWAP");
+            swap();
+        }else{
+            mBalanceSecondary.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    swap();
+                }
+            });
+
+            mBalancePrimary.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    swap();
+                }
+            });
+        }
 
         onConnectionChanged(InternetManager.getInstance().isConnected(this));
 
         updateUi();
         mWallet = WalletsMaster.getInstance().getCurrentWallet(this);
+
+
+
 
         // Check if the "Twilight" screen altering app is currently running
         if (Utils.checkIfScreenAlteringAppIsRunning(this, URBAN_APP_PACKAGE_NAME)) {
@@ -254,35 +348,116 @@ public class WalletActivity extends BRActivity implements InternetManager.Connec
             return;
         }
 
-        mCurrencyTitle.setText(walletManager.getName());
-        String startColor = walletManager.getUiConfiguration().getStartColor();
-        String endColor = walletManager.getUiConfiguration().getEndColor();
-        int currentTheme = UiUtils.getThemeId(this);
+        if(!SNO.isEmpty()) {
 
-        if (currentTheme == R.style.AppTheme_Dark) {
-            mSendButton.setColor(getColor(R.color.wallet_footer_button_color_dark));
-            mReceiveButton.setColor(getColor(R.color.wallet_footer_button_color_dark));
-            mSellButton.setColor(getColor(R.color.wallet_footer_button_color_dark));
+            BigDecimal bigExchangeRate = walletManager.getFiatExchangeRate(this);
+
+
+            mCurrencyTitle.setText("SaveNode");
+            mCurrencyPriceUsd.setText("$"+SharedPrefsNew.getStrings(WalletActivity.this,ConstantsNew.USD_VALUE));
+            String balance = SharedPrefsNew.getStrings(this,ConstantsNew.BALANCE_SAVE_NODE_WALLET) + " SNO";
+            mBalanceSecondary.setText(balance);
+            mBalancePrimary.setText(SharedPrefsNew.getStrings(WalletActivity.this,ConstantsNew.USD_BALANCE));
+
+            if (Utils.isNullOrZero(bigExchangeRate)) {
+                if(!SNO.isEmpty()){
+                    mCurrencyPriceUsd.setText("$"+SharedPrefsNew.getStrings(WalletActivity.this,ConstantsNew.USD_VALUE));
+
+                }else{
+                    mCurrencyPriceUsd.setVisibility(View.INVISIBLE);
+
+                }
+            } else {
+                if(!SNO.isEmpty()){
+                    mCurrencyPriceUsd.setText("$"+SharedPrefsNew.getStrings(WalletActivity.this,ConstantsNew.USD_VALUE));
+
+                }else{
+                    mCurrencyPriceUsd.setVisibility(View.VISIBLE);
+
+                }
+            }
+
+            String startColor = walletManager.getUiConfiguration().getStartColor();
+            String endColor = walletManager.getUiConfiguration().getEndColor();
+            int currentTheme = UiUtils.getThemeId(this);
+
+            if (currentTheme == R.style.AppTheme_Dark) {
+                mSendButton.setColor(getColor(R.color.wallet_footer_button_color_dark));
+                mReceiveButton.setColor(getColor(R.color.wallet_footer_button_color_dark));
+                mSellButton.setColor(getColor(R.color.wallet_footer_button_color_dark));
+
+                if (endColor != null) {
+                    if(!SNO.isEmpty()){
+                        mWalletFooter.setBackgroundColor(getColor(R.color.saveNode));
+                    }else{
+                        mWalletFooter.setBackgroundColor(Color.parseColor(endColor));
+                    }
+                }
+            } else {
+                if (endColor != null) {
+                    if(!SNO.isEmpty()){
+                        mSendButton.setColor(getColor(R.color.saveNode));
+                        mReceiveButton.setColor(getColor(R.color.saveNode));
+                    }else{
+                        mSendButton.setColor(Color.parseColor(endColor));
+                        mReceiveButton.setColor(Color.parseColor(endColor));
+                        mSellButton.setColor(Color.parseColor(endColor));
+
+                    }
+                }
+            }
 
             if (endColor != null) {
-                mWalletFooter.setBackgroundColor(Color.parseColor(endColor));
+                //it's a gradient
+                GradientDrawable gd = new GradientDrawable(
+                        GradientDrawable.Orientation.LEFT_RIGHT,
+                        new int[]{Color.parseColor(startColor), Color.parseColor(endColor)});
+                gd.setCornerRadius(0f);
+                mToolbar.setBackground(gd);
+            } else {
+                //it's a solid color
+                mToolbar.setBackgroundColor(Color.parseColor(startColor));
             }
-        } else if (endColor != null) {
-            mSendButton.setColor(Color.parseColor(endColor));
-            mReceiveButton.setColor(Color.parseColor(endColor));
-            mSellButton.setColor(Color.parseColor(endColor));
-        }
 
-        if (endColor != null) {
-            //it's a gradient
-            GradientDrawable gd = new GradientDrawable(
-                    GradientDrawable.Orientation.LEFT_RIGHT,
-                    new int[]{Color.parseColor(startColor), Color.parseColor(endColor)});
-            gd.setCornerRadius(0f);
-            mToolbar.setBackground(gd);
-        } else {
-            //it's a solid color
-            mToolbar.setBackgroundColor(Color.parseColor(startColor));
+
+
+
+
+
+        }
+        else {
+            BigDecimal bigExchangeRate = walletManager.getFiatExchangeRate(this);
+
+            mCurrencyTitle.setText(walletManager.getName());
+            String startColor = walletManager.getUiConfiguration().getStartColor();
+            String endColor = walletManager.getUiConfiguration().getEndColor();
+            int currentTheme = UiUtils.getThemeId(this);
+
+            if (currentTheme == R.style.AppTheme_Dark) {
+                mSendButton.setColor(getColor(R.color.wallet_footer_button_color_dark));
+                mReceiveButton.setColor(getColor(R.color.wallet_footer_button_color_dark));
+                mSellButton.setColor(getColor(R.color.wallet_footer_button_color_dark));
+
+                if (endColor != null) {
+                    mWalletFooter.setBackgroundColor(Color.parseColor(endColor));
+                }
+            } else if (endColor != null) {
+                mSendButton.setColor(Color.parseColor(endColor));
+                mReceiveButton.setColor(Color.parseColor(endColor));
+                mSellButton.setColor(Color.parseColor(endColor));
+            }
+
+            if (endColor != null) {
+                //it's a gradient
+                GradientDrawable gd = new GradientDrawable(
+                        GradientDrawable.Orientation.LEFT_RIGHT,
+                        new int[]{Color.parseColor(startColor), Color.parseColor(endColor)});
+                gd.setCornerRadius(0f);
+                mToolbar.setBackground(gd);
+            } else {
+                //it's a solid color
+                mToolbar.setBackgroundColor(Color.parseColor(startColor));
+            }
         }
     }
 
@@ -512,8 +687,12 @@ public class WalletActivity extends BRActivity implements InternetManager.Connec
             }
 
             Bundle arguments = new Bundle();
+            if(!SNO.isEmpty()){
+                arguments.putString("SNO","SNO");
+            }
             arguments.putSerializable(EXTRA_CRYPTO_REQUEST, request);
             fragmentSend.setArguments(arguments);
+
             if (!fragmentSend.isAdded()) {
                 getSupportFragmentManager().beginTransaction()
                         .setCustomAnimations(0, 0, 0, R.animator.plain_300)
@@ -521,7 +700,6 @@ public class WalletActivity extends BRActivity implements InternetManager.Connec
                         .addToBackStack(FragmentSend.class.getName()).commit();
             }
         }, SEND_SHOW_DELAY);
-
     }
 
     // region BRSearchBar.FilterListener

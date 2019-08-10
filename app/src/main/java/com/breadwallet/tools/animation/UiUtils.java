@@ -281,6 +281,30 @@ public class UiUtils {
 
     }
 
+    public static void showReceiveFragment(FragmentActivity app, boolean isReceive, String SNO) {
+        if (app == null) {
+            Log.e(TAG, "showReceiveFragment: app is null");
+            return;
+        }
+        FragmentReceive fragmentReceive = (FragmentReceive) app.getSupportFragmentManager().findFragmentByTag(FragmentReceive.class.getName());
+        if (fragmentReceive != null && fragmentReceive.isAdded())
+            return;
+        fragmentReceive = new FragmentReceive();
+        Bundle args = new Bundle();
+        if(!SNO.isEmpty()){
+            args.putString("SNO","SNO");
+        }
+        args.putBoolean(EXTRA_RECEIVE, isReceive);
+
+        fragmentReceive.setArguments(args);
+
+        app.getSupportFragmentManager().beginTransaction()
+                .setCustomAnimations(0, 0, 0, R.animator.plain_300)
+                .add(android.R.id.content, fragmentReceive, FragmentReceive.class.getName())
+                .addToBackStack(FragmentReceive.class.getName()).commit();
+
+    }
+
     public static void showLegacyAddressFragment(final FragmentActivity fragmentActivity) {
         if (fragmentActivity != null) {
             BRExecutor.getInstance().forLightWeightBackgroundTasks().execute(new Runnable() {

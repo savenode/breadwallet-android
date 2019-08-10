@@ -1,6 +1,7 @@
 package com.breadwallet.presenter.fragments;
 
 import android.app.Activity;
+import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
@@ -23,6 +24,8 @@ import com.breadwallet.presenter.customviews.BRKeyboard;
 import com.breadwallet.presenter.customviews.BRLinearLayoutWithCaret;
 import com.breadwallet.presenter.entities.CryptoRequest;
 import com.breadwallet.presenter.fragments.utils.ModalDialogFragment;
+import com.breadwallet.sharedPrefsPackageNew.ConstantsNew;
+import com.breadwallet.sharedPrefsPackageNew.SharedPrefsNew;
 import com.breadwallet.tools.animation.SlideDetector;
 import com.breadwallet.tools.animation.UiUtils;
 import com.breadwallet.tools.manager.BRClipboardManager;
@@ -35,8 +38,13 @@ import com.breadwallet.wallet.WalletsMaster;
 import com.breadwallet.wallet.abstracts.BaseWalletManager;
 import com.breadwallet.wallet.abstracts.BalanceUpdateListener;
 import com.breadwallet.wallet.util.CryptoUriParser;
+import com.google.zxing.BarcodeFormat;
+import com.google.zxing.MultiFormatWriter;
+import com.google.zxing.common.BitMatrix;
+import com.journeyapps.barcodescanner.BarcodeEncoder;
 import com.platform.HTTPServer;
 
+import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
 import java.util.Map;
 
@@ -86,6 +94,9 @@ public class FragmentReceive extends ModalDialogFragment implements BalanceUpdat
     private ViewGroup mBackgroundLayout;
     private ViewGroup mSignalLayout;
 
+    String SNO = "";
+    Bitmap bitmap;
+
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         // The last two arguments ensure LayoutParams are inflated
@@ -111,6 +122,18 @@ public class FragmentReceive extends ModalDialogFragment implements BalanceUpdat
         setListeners();
 
         ImageButton faq = rootView.findViewById(R.id.faq_button);
+
+        try{
+            SNO = getArguments().getString("SNO");
+            if(SNO == null){
+                SNO = "";
+            }else{
+                SNO = "SNO";
+
+            }
+        }catch (Exception e){
+
+        }
 
         faq.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -235,17 +258,45 @@ public class FragmentReceive extends ModalDialogFragment implements BalanceUpdat
                     public void run() {
                         mReceiveAddress = walletManager.getAddress(getContext());
                         String decoratedReceiveAddress = walletManager.decorateAddress(mReceiveAddress);
-                        mAddress.setText(decoratedReceiveAddress);
-                        Utils.correctTextSizeIfNeeded(mAddress);
-                        Uri uri = CryptoUriParser.createCryptoUrl(getActivity(), walletManager, new CryptoRequest.Builder().setAddress(decoratedReceiveAddress).build());
-                        boolean generated = QRUtils.generateQR(getActivity(), uri.toString(), mQrImage);
-                        if (!QRUtils.generateQR(getContext(), uri.toString(), mQrImage)) {
-                            throw new RuntimeException("failed to generate qr image for address");
+                        if(!SNO.isEmpty()){
+                            mAddress.setText(SharedPrefsNew.getStrings(getActivity(), ConstantsNew.SAVE_NODE_WALLET_ADDRESS));
+                            mQrImage.setImageBitmap(generateBitmap());
+                        }else{
+                            mAddress.setText(decoratedReceiveAddress);
+                            Utils.correctTextSizeIfNeeded(mAddress);
+                            Uri uri = CryptoUriParser.createCryptoUrl(getActivity(), walletManager, new CryptoRequest.Builder().setAddress(decoratedReceiveAddress).build());
+                            boolean generated = QRUtils.generateQR(getActivity(), uri.toString(), mQrImage);
+                            if (!QRUtils.generateQR(getContext(), uri.toString(), mQrImage)) {
+                                throw new RuntimeException("failed to generate qr image for address");
+                            }
                         }
                     }
                 });
             }
         });
+    }
+
+    Bitmap generateBitmap() {
+        String text = SharedPrefsNew.getStrings(getActivity(),ConstantsNew.SAVE_NODE_WALLET_ADDRESS);// Whatever you need to encode in the QR code
+        if(text == null || text.isEmpty()){
+            text = "error finding address";
+        }
+        Log.d(TAG, text);
+        try{
+            MultiFormatWriter multiFormatWriter = new MultiFormatWriter();
+            BitMatrix bitMatrix = multiFormatWriter.encode(text, BarcodeFormat.QR_CODE, 800, 800);
+            BarcodeEncoder barcodeEncoder = new BarcodeEncoder();
+            bitmap = barcodeEncoder.createBitmap(bitMatrix);
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 100, baos);
+            return bitmap;
+
+
+        }catch (Exception e){
+            Log.d(TAG, e.toString());
+        }
+
+        return null;
     }
 
     private void copyText() {

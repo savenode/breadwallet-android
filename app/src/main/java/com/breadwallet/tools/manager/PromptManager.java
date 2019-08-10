@@ -17,6 +17,7 @@ import com.breadwallet.presenter.customviews.BaseTextView;
 import com.breadwallet.presenter.customviews.BRButton;
 import com.breadwallet.presenter.customviews.BREdit;
 import com.breadwallet.presenter.customviews.PinLayout;
+import com.breadwallet.presenter.interfaces.BasePromptActions;
 import com.breadwallet.tools.animation.SpringAnimator;
 import com.breadwallet.tools.security.BRKeyStore;
 import com.breadwallet.tools.threads.executor.BRExecutor;
@@ -64,6 +65,8 @@ public final class PromptManager {
     private static final String EMAIL_REGEX = "^[a-zA-Z0-9_+&*-]+(?:\\.[a-zA-Z0-9_+&*-]+)*@(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,7}$";
 
     private static PromptManager.PromptItem mCurrentPrompt;
+
+    public static BasePromptActions basePromptActions;
 
     private PromptManager() {
     }
@@ -139,6 +142,12 @@ public final class PromptManager {
             @Override
             public void onClick(View view) {
                 hidePrompt(context, baseLayout);
+                try {
+                    PromptManager.basePromptActions.didPressDismissButton();
+                }
+                catch (Exception e) {
+                    e.printStackTrace();
+                }
             }
         });
         switch (promptItem) {

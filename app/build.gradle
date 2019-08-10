@@ -60,7 +60,7 @@ android {
         brd {
             applicationId = "com.breadwallet"
             dimension "mode"
-            resValue "string", "app_name", "BRD"
+            resValue "string", "app_name", "SaveNode"//"BRD"
             buildConfigField "boolean", "BITCOIN_TESTNET", "false"
             signingConfig signingConfigs.FakeSigningConfig // Uncomment to fake sign a mainnet release build for testing.
             missingDimensionStrategy 'network', 'onMainnet'
@@ -229,6 +229,12 @@ dependencies {
     implementation 'org.slf4j:slf4j-api:1.7.22'
     implementation 'tools.fastlane:screengrab:1.1.0'
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
+
+    // Added dependencies by VAIVAL's developer
+    implementation 'com.android.volley:volley:1.1.1'
+    implementation 'me.dm7.barcodescanner:zbar:1.8.4'
+    implementation 'com.journeyapps:zxing-android-embedded:3.2.0@aar'
+    implementation 'com.karumi:dexter:5.0.0'
 }
 
 apply plugin: 'com.google.gms.google-services'
